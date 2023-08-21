@@ -5,6 +5,7 @@ const dotenv = require("dotenv").config();
 const PORT = process.env.PORT || 6000;
 const authUser = require("./routes/authRoute");
 const bodyParser = require("body-parser");
+const cookieParser = require("cookie-parser");
 const { notFound, errorHandler } = require("./middlewares/errorHandler");
 
 dbConnect();
@@ -12,6 +13,7 @@ dbConnect();
 //chuyển hóa dữ liệu đầu vào sang dạng json
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
+app.use(cookieParser());
 
 app.use("/api/user", authUser);
 
