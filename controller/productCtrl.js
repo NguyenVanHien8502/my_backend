@@ -28,8 +28,35 @@ const getaProduct = asyncHandler(async (req, res) => {
 
 const getallProduct = asyncHandler(async (req, res) => {
   try {
-    const findallProduct = await Product.find(req.query);
-    res.json(findallProduct);
+    //Filtering
+    const queryObj = { ...req.query };
+    //xóa những trường k cần thiết ra khỏi queryObj
+    const excludeFields = ["page", "sort", "limit", "field"];
+    excludeFields.forEach((el) => delete queryObj[el]);
+    //chuyển queryObj sang dạng JSON để chuyển bị cho việc tìm kiếm
+    let queryStr = JSON.stringify(queryObj);
+    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
+
+    let query = Product.find(JSON.parse(queryStr));
+
+    //Sorting
+    if (req.query.sort) {
+      const sortBy = req.query.sort.split(",").join(" "); //tách cái query đó ra và gộp thành 1 mảng
+      query = query.sort(sortBy);
+    } else {
+      query = query.sort("-createdAt");
+    }
+
+    //Limiting the fields
+    if (req.query.fields) {
+      const fields = req.query.fields.split(",").join(" ");
+      query = query.select(fields);
+    } else {
+      query = query.select("-__v"); // loại bỏ trường được thêm tự động bởi mongo ra khỏi query
+    }
+
+    const product = await query;
+    res.json(product);
   } catch (error) {
     throw new Error(error);
   }

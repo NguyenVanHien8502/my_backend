@@ -4,6 +4,8 @@ const User = require("../models/userModel");
 const asyncHandler = require("express-async-handler");
 const validateMongoDbId = require("../utils/validateMongodbId");
 const jwt = require("jsonwebtoken");
+const { sendEmail } = require("./emailCtrl");
+const crypto = require("crypto");
 
 const createUser = asyncHandler(async (req, res) => {
   const email = req.body.email;
@@ -192,6 +194,93 @@ const unBlockUser = asyncHandler(async (req, res) => {
   }
 });
 
+const updatePassword = asyncHandler(async (req, res) => {
+  const { _id } = req.user;
+  const { password } = req.body;
+  validateMongoDbId(_id);
+  const user = await User.findById(_id);
+  if (password) {
+    if (await user.isPasswordMatched(password)) {
+      throw new Error("Password before and after change must be different");
+    } else {
+      user.password = password;
+      const updatePassword = await user.save();
+      res.json({
+        msg: "Password is changed successfully",
+        success: true,
+        user: updatePassword,
+      });
+    }
+  } else {
+    res.json({
+      msg: "Password is not changed",
+    });
+  }
+});
+
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) throw new Error("User is not found with this email");
+  try {
+    const resetToken = await user.createPasswordResetToken();
+    // user.passwordResetToken = resetToken;
+    // await user.save();
+    const resetURL = `Hi, Please follow this link to reset your password. This link is valid in 10 minutes from now. <a href="http://localhost:5000/api/user/reset-password/${resetToken}">Click here</a>`;
+    const data = {
+      to: email,
+      subject: "Forgot Password Link",
+      text: "Hey User",
+      htm: resetURL,
+    };
+    sendEmail(data);
+    res.json(resetToken);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  // cách tự nghĩ kết hợp với 2 dòng ở hàm forgot password
+  // const { resetToken } = req.params;
+  // const { password, repassword } = req.body;
+  // const user = await User.findOne({ passwordResetToken: resetToken });
+  // if (user) {
+  //   if (password === repassword) {
+  //     user.password = password;
+  //     await user.save();
+  //     res.json({
+  //       msg: "Reset password successfully",
+  //       success: true,
+  //     });
+  //   } else {
+  //     res.json("Password and Repassword must be the same");
+  //   }
+  // } else {
+  //   throw new Error("Not user is reseted password");
+  // }
+
+  // cách trên ytb
+  const { resetToken } = req.params;
+  const { password } = req.body;
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+  const user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetExpires: { $gt: Date.now() },
+  });
+  if (!user) throw new Error("Token Expired, Please try again later");
+  user.password = password;
+  user.passwordResetToken = undefined;
+  user.passwordResetExpires = undefined;
+  await user.save();
+  res.json({
+    msg: "Reset Password Successfully",
+    success: true,
+  });
+});
 module.exports = {
   createUser,
   loginUser,
@@ -203,4 +292,7 @@ module.exports = {
   unBlockUser,
   handleRefreshToken,
   logout,
+  updatePassword,
+  forgotPassword,
+  resetPassword,
 };
