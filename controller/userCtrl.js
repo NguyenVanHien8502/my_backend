@@ -1,6 +1,8 @@
 const generateToken = require("../config/jwtToken");
 const generateRefreshToken = require("../config/refreshToken");
 const User = require("../models/userModel");
+const Product = require("../models/productModel");
+const Cart = require("../models/cartModel");
 const asyncHandler = require("express-async-handler");
 const validateMongoDbId = require("../utils/validateMongodbId");
 const jwt = require("jsonwebtoken");
@@ -48,6 +50,44 @@ const loginUser = asyncHandler(async (req, res) => {
         token: generateToken(findUser?._id),
       },
     });
+  } else {
+    throw new Error("Invalid Credential!");
+  }
+});
+
+const loginAdmin = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  const findAdmin = await User.findOne({ email: email });
+  if (findAdmin && (await findAdmin.isPasswordMatched(password))) {
+    if (findAdmin.role === "admin") {
+      const refreshToken = await generateRefreshToken(findAdmin?._id);
+      const updateAdmin = await User.findByIdAndUpdate(
+        findAdmin?._id,
+        {
+          refreshToken: refreshToken,
+        },
+        {
+          new: true,
+        }
+      );
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        maxAge: 72 * 60 * 60 * 1000,
+      });
+      res.json({
+        msg: "Login Successfully!",
+        success: true,
+        admin: {
+          _id: updateAdmin?._id,
+          username: updateAdmin?.username,
+          email: updateAdmin?.email,
+          role: updateAdmin?.role,
+          token: generateToken(updateAdmin?._id),
+        },
+      });
+    } else {
+      throw new Error("You are not an admin");
+    }
   } else {
     throw new Error("Invalid Credential!");
   }
@@ -281,6 +321,109 @@ const resetPassword = asyncHandler(async (req, res) => {
     success: true,
   });
 });
+
+const getWishlist = asyncHandler(async (req, res) => {
+  try {
+    const { _id } = req.user;
+    validateMongoDbId(_id);
+    const findUser = await User.findById(_id).populate("wishlist");
+    res.json({
+      wishlist: findUser?.wishlist,
+    });
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+const userCart = asyncHandler(async (req, res) => {
+  const { productId, quantity } = req.body;
+  const { _id } = req.user;
+  validateMongoDbId(_id);
+  try {
+    const getPrice = await Product.findById(productId).select("price").exec();
+    const newCart = await new Cart({
+      userId: _id,
+      productId: productId,
+      quantity: quantity,
+      price: getPrice.price,
+    }).save();
+    res.json(newCart);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+const getUserCart = asyncHandler(async (req, res) => {
+  const { _id } = req.user;
+  validateMongoDbId(_id);
+  try {
+    const cart = await Cart.find({ userId: _id }).populate("productId");
+    res.json(cart);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+const deleteProductFromCart = asyncHandler(async (req, res) => {
+  const { itemId } = req.body;
+  const { _id } = req.user;
+  validateMongoDbId(itemId);
+  validateMongoDbId(_id);
+  try {
+    const deleteProductFromCart = await Cart.deleteOne({
+      userId: _id,
+      _id: itemId,
+    });
+    res.json(deleteProductFromCart);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+const updateProductQuantityFromCart = asyncHandler(async (req, res) => {
+  const { _id } = req.user;
+  const { itemId, newQuantity } = req.body;
+  validateMongoDbId(_id);
+  validateMongoDbId(itemId);
+  try {
+    const updateItem = await Cart.findByIdAndUpdate(
+      {
+        userId: _id,
+        _id: itemId,
+      },
+      {
+        quantity: newQuantity,
+      },
+      {
+        new: true,
+      }
+    );
+    res.json({
+      msg: "Updated Product Quantity successfully",
+      success: true,
+      updateItem: updateItem,
+    });
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+const emptyCart = asyncHandler(async (req, res) => {
+  //Xóa toàn bộ giỏ hàng
+  const { _id } = req.user;
+  validateMongoDbId(_id);
+  try {
+    const emptyCart = await Cart.deleteMany({ userId: _id });
+    res.json({
+      msg: "Deleted all item in cart successfully",
+      success: true,
+      infomation: emptyCart,
+    });
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
 module.exports = {
   createUser,
   loginUser,
@@ -295,4 +438,11 @@ module.exports = {
   updatePassword,
   forgotPassword,
   resetPassword,
+  loginAdmin,
+  getWishlist,
+  userCart,
+  getUserCart,
+  deleteProductFromCart,
+  updateProductQuantityFromCart,
+  emptyCart,
 };
