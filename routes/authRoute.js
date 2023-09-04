@@ -20,6 +20,10 @@ const {
   deleteProductFromCart,
   updateProductQuantityFromCart,
   emptyCart,
+  createOrder,
+  getUserOrder,
+  getAllOrders,
+  applyCoupon,
 } = require("../controller/userCtrl");
 const { authMiddleware, isAdmin } = require("../middlewares/authMiddleware");
 const router = express.Router();
@@ -32,6 +36,8 @@ router.get("/logout", logout);
 router.get("/refreshToken", handleRefreshToken);
 router.get("/wishlist", authMiddleware, getWishlist);
 router.get("/cart", authMiddleware, getUserCart);
+router.get("/get-user-order", authMiddleware, getUserOrder);
+router.get("/get-all-order", authMiddleware, getAllOrders);
 //đặt cái route /refreshToken lên trước route /:id vì nếu đặt sau thì sẽ bị hiểu nhầm "refreshToken" chính là id của route /:id
 router.get("/:id", authMiddleware, isAdmin, getaUser);
 router.delete("/", authMiddleware, deleteaUser);
@@ -53,4 +59,6 @@ router.put(
   updateProductQuantityFromCart
 );
 router.delete("/empty-cart", authMiddleware, emptyCart);
+router.post("/create-order", authMiddleware, createOrder);
+router.post("/apply-coupon", authMiddleware, applyCoupon);
 module.exports = router;

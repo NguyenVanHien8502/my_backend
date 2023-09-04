@@ -3,6 +3,8 @@ const generateRefreshToken = require("../config/refreshToken");
 const User = require("../models/userModel");
 const Product = require("../models/productModel");
 const Cart = require("../models/cartModel");
+const Order = require("../models/orderModel");
+const Coupon = require("../models/couponModel");
 const asyncHandler = require("express-async-handler");
 const validateMongoDbId = require("../utils/validateMongodbId");
 const jwt = require("jsonwebtoken");
@@ -424,6 +426,113 @@ const emptyCart = asyncHandler(async (req, res) => {
   }
 });
 
+const createOrder = asyncHandler(async (req, res) => {
+  const { _id } = req.user;
+  validateMongoDbId(_id);
+  try {
+    const { shippingInfo } = req.body;
+    const cart = await Cart.find({ userId: _id });
+    let totalPrice = 0;
+    for (let i = 0; i < cart.length; i++) {
+      totalPrice += cart[i].price * cart[i].quantity;
+    }
+    let orderItems = [];
+    for (let i = 0; i < cart.length; i++) {
+      let object = {};
+      object.product = cart[i].productId;
+      object.quantity = cart[i].quantity;
+      object.price = cart[i].price;
+      orderItems.push(object);
+    }
+    const order = await Order.create({
+      user: _id,
+      shippingInfo: shippingInfo,
+      orderItems: orderItems,
+      totalPrice: totalPrice,
+    });
+    //cập nhật lại số lượng sản phẩm sau khi order
+    for (let i = 0; i < orderItems.length; i++) {
+      await Product.findByIdAndUpdate(
+        orderItems[i].product,
+        {
+          $inc: {
+            quantity: -orderItems[i].quantity,
+            sold: +orderItems[i].quantity,
+          },
+        },
+        {
+          new: true,
+        }
+      );
+    }
+    //xóa cart sau khi order
+    await Cart.deleteMany({ userId: _id });
+    res.json({
+      msg: "Ordered successfully!",
+      success: true,
+      order: order,
+    });
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+const getUserOrder = asyncHandler(async (req, res) => {
+  const { _id } = req.user;
+  validateMongoDbId(_id);
+  try {
+    const getUserOrder = await Order.find({ user: _id }).populate(
+      "orderItems.product"
+    );
+    res.json(getUserOrder);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+const getAllOrders = asyncHandler(async (req, res) => {
+  try {
+    const getAllOrder = await Order.find().populate("orderItems.product");
+    res.json(getAllOrder);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+const applyCoupon = asyncHandler(async (req, res) => {
+  const { _id } = req.user;
+  validateMongoDbId(_id);
+  try {
+    const { applyCoupon } = req.body;
+    const cart = await Cart.find({ userId: _id });
+    let totalPriceAfterDiscount = 0;
+    for (let i = 0; i < cart.length; i++) {
+      let appliedCoupon = false;
+      for (let j = 0; j < applyCoupon.length; j++) {
+        let coupon = await Coupon.findOne({ name: applyCoupon[i].coupon });
+        if (!coupon) throw new Error("Not exist this coupon");
+        if (
+          JSON.parse(JSON.stringify(cart[i].productId)) ===
+          applyCoupon[j].validProduct
+        ) {
+          appliedCoupon = true;
+          totalPrice =
+            cart[i].price * cart[i].quantity -
+            (coupon.discount * cart[i].price * cart[i].quantity) / 100;
+          totalPriceAfterDiscount += totalPrice;
+          break;
+        }
+      }
+      if (!appliedCoupon) {
+        totalPriceAfterDiscount += cart[i].price * cart[i].quantity;
+      }
+    }
+    res.json(totalPriceAfterDiscount);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
 module.exports = {
   createUser,
   loginUser,
@@ -445,4 +554,8 @@ module.exports = {
   deleteProductFromCart,
   updateProductQuantityFromCart,
   emptyCart,
+  createOrder,
+  getUserOrder,
+  getAllOrders,
+  applyCoupon,
 };

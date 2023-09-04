@@ -31,15 +31,15 @@ var orderSchema = new mongoose.Schema(
         product: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Product",
-          required: true,
+          // required: true,
         },
         quantity: {
           type: Number,
-          required: true,
+          // required: true,
         },
         price: {
           type: Number,
-          required: true,
+          // required: true,
         },
       },
     ],
@@ -49,7 +49,7 @@ var orderSchema = new mongoose.Schema(
     },
     totalPrice: {
       type: Number,
-      required: true,
+      // required: true,
     },
     // totalPriceAfterDiscount: {
     //     type: Number,

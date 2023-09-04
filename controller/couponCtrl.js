@@ -28,6 +28,7 @@ const updateCoupon = asyncHandler(async (req, res) => {
       id,
       {
         name: req?.body?.name,
+        validProduct: req?.body?.validProduct,
         expiry: req?.body?.expiry,
         discount: req?.body?.discount,
       },

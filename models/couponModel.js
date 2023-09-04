@@ -8,6 +8,11 @@ var couponSchema = new mongoose.Schema({
     unique: true,
     uppercase: true,
   },
+  validProduct: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Product",
+    required: true,
+  },
   expiry: {
     type: Date,
     required: true,
